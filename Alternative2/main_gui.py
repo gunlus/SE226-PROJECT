@@ -7,7 +7,11 @@ import vertexai
 from PIL import Image, ImageTk
 import io
 
+# Initialize Vertex AI with project and location
 vertexai.init(project="dark-yen-459418-k4", location="us-central1")
+
+# Global variable for image window reference
+image_window = None
 
 
 def generate_image(scene_description, location, style):
@@ -23,9 +27,7 @@ def generate_image(scene_description, location, style):
     print("IMAGE PROMPT:", prompt)
 
     try:
-        model = ImageGenerationModel.from_pretrained("imagegeneration@002")
         image_response = model.generate_images(prompt=prompt, number_of_images=1)
-
         print("Image successfully generated:", image_response)
 
         image_bytes = image_response[0]._image_bytes
@@ -60,17 +62,65 @@ def clean_title(raw_title):
     return raw_title
 
 
+def show_image_in_new_window(img):
+    global image_window
+
+    # Close existing image window if open
+    if image_window is not None and tk.Toplevel.winfo_exists(image_window):
+        image_window.destroy()
+        image_window = None
+
+    # Create a new window to display the generated image
+    image_window = tk.Toplevel()
+    image_window.title("Generated Image")
+
+    # When user closes this window, set image_window to None
+    def on_close():
+        global image_window
+        image_window.destroy()
+        image_window = None
+
+    image_window.protocol("WM_DELETE_WINDOW", on_close)
+
+    photo = ImageTk.PhotoImage(img)
+    label = tk.Label(image_window, image=photo)
+    label.image = photo
+    label.pack()
+
+
 def start_gui():
     def on_select(event):
         selection = listbox.curselection()
         if not selection:
             return
 
+        # Close any open image window when switching movies
+        global image_window
+        if image_window is not None and tk.Toplevel.winfo_exists(image_window):
+            image_window.destroy()
+            image_window = None
+
+        # Reset inputs to default values when a new movie is selected
+        character_entry.delete(0, tk.END)
+        character_entry.insert(0, "2")
+
+        wordcount_entry.delete(0, tk.END)
+        wordcount_entry.insert(0, "100")
+
+        maxlength_entry.delete(0, tk.END)
+        maxlength_entry.insert(0, "150")
+
+        location_entry.delete(0, tk.END)
+        location_entry.insert(0, "a city street")
+
+        style_combobox.current(0)
+
         index = selection[0]
         raw_title = movie_data[index][0]
         title = clean_title(raw_title)
         summary, storyline = get_summary_and_storyline(title)
 
+        # Clear and update the text box with movie info
         text_box.delete("1.0", tk.END)
         text_box.insert(tk.END, f"Movie: {title}\n\n")
         text_box.insert(tk.END, f"Summary:\n{summary}\n\n")
@@ -101,9 +151,10 @@ def start_gui():
         location = location_entry.get()
         style = style_combobox.get()
 
-        # Scene description = first paragraph of Gemini's response
+        # Extract scene description as the first paragraph of Gemini's response
         scene_description = full_dialogue.strip().split("\n")[0]
 
+        # Filter out risky words and replace description if needed
         dangerous_words = ["kill", "dead", "blood", "war", "drug", "murder", "corpse", "naked", "violence"]
         if any(word in scene_description.lower() for word in dangerous_words):
             print("Scene description contains risky words. Replacing it with a safe default.")
@@ -118,13 +169,10 @@ def start_gui():
             text_box.insert(tk.END, "\nCould not generate image. Try different location or description.\n")
             return
 
-        # Resize for Tkinter display
-        img = img.resize((400, 300))
-        photo = ImageTk.PhotoImage(img)
-        image_label.config(image=photo)
-        image_label.image = photo  # keep reference
+        # Show the image in a new window
+        show_image_in_new_window(img)
 
-        # Display info in text box
+        # Update the text box with all info and dialogue
         text_box.delete("1.0", tk.END)
         text_box.insert(tk.END, f"Movie: {title}\n\n")
         text_box.insert(tk.END, f"Summary:\n{summary}\n\n")
@@ -134,9 +182,6 @@ def start_gui():
     root = tk.Tk()
     root.title("IMDB TOP 10 MOVIES")
     root.geometry("900x600")
-
-    image_label = tk.Label(root)
-    image_label.pack(side=tk.BOTTOM, pady=10)
 
     main_frame = ttk.Frame(root, padding=20)
     main_frame.pack(fill=tk.BOTH, expand=True)
@@ -153,6 +198,7 @@ def start_gui():
     ttk.Label(control_frame, text="Location:").grid(row=0, column=2, padx=5, sticky=tk.W)
     location_entry = ttk.Entry(control_frame, width=20)
     location_entry.grid(row=0, column=3, padx=5)
+    location_entry.insert(0, "a city street")
 
     ttk.Label(control_frame, text="e.g. 'a street in Paris', 'a space station', 'a beach at sunset'",
               font=("Arial", 8, "italic")).grid(row=0, column=4, padx=5)
@@ -166,14 +212,17 @@ def start_gui():
     ttk.Label(control_frame, text="Number of Characters:").grid(row=0, column=0, sticky=tk.W, padx=5)
     character_entry = ttk.Entry(control_frame, width=10)
     character_entry.grid(row=0, column=1, padx=5)
+    character_entry.insert(0, "2")
 
     ttk.Label(control_frame, text="Word Count:").grid(row=1, column=0, sticky=tk.W, padx=5)
     wordcount_entry = ttk.Entry(control_frame, width=10)
     wordcount_entry.grid(row=1, column=1, padx=5)
+    wordcount_entry.insert(0, "100")
 
     ttk.Label(control_frame, text="Max Dialogue Length:").grid(row=2, column=0, sticky=tk.W, padx=5)
     maxlength_entry = ttk.Entry(control_frame, width=10)
     maxlength_entry.grid(row=2, column=1, padx=5)
+    maxlength_entry.insert(0, "150")
 
     generate_button = ttk.Button(control_frame, text="Generate Dialogue", command=on_generate_dialogue)
     generate_button.grid(row=3, column=0, columnspan=2, pady=10)
