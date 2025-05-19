@@ -13,13 +13,14 @@ import vertexai
 from PIL import Image, ImageTk
 import io
 
+# Vertex AI setup
 vertexai.init(
     project="dark-yen-459418-k4",
     location="us-central1"
 )
-vertexai.init(project="dark-yen-459418-k4", location="us-central1")
 
 
+# Generate image using Vertex AI
 def generate_image(scene_description, location, style):
     model = ImageGenerationModel.from_pretrained("imagegeneration@002")
 
@@ -33,9 +34,7 @@ def generate_image(scene_description, location, style):
     print("IMAGE PROMPT:", prompt)
 
     try:
-        model = ImageGenerationModel.from_pretrained("imagegeneration@002")
         image_response = model.generate_images(prompt=prompt, number_of_images=1)
-
         print("Image successfully generated:", image_response)
 
         image_bytes = image_response[0]._image_bytes
@@ -46,9 +45,11 @@ def generate_image(scene_description, location, style):
         return None
 
 
+# Gemini LLM setup
 genai.configure(api_key="AIzaSyCtTPtcczd13x5K-VHHP6WaRMIknvlmtoY")
 
 
+# Generate dialogue using Gemini
 def generate_dialogue(storyline, num_chars, word_count, max_len):
     prompt = f"""
     Create a movie dialogue between {num_chars} characters.
@@ -57,22 +58,27 @@ def generate_dialogue(storyline, num_chars, word_count, max_len):
     {storyline}
 
     Limit total word count to approximately {word_count}.
-    Return only the dialogue and a scene description at the top.
+    At the beginning, write a short, safe, neutral scene description that can be used in a family-friendly image generation prompt.
+    Avoid character names from copyrighted universes.
+    Return only the dialogue and a scene description.
     """
     model = genai.GenerativeModel("gemini-1.5-flash")
     response = model.generate_content(prompt)
     return response.text
 
 
+# Clean up movie title from numbered list
 def clean_title(raw_title):
     if len(raw_title) > 2 and raw_title[1] == ".":
         return raw_title.split(". ", 1)[1]
     return raw_title
 
 
+# Start GUI
 def start_gui():
     global current_dialogue
     current_dialogue = ""
+
     def on_select(event):
         selection = listbox.curselection()
         if not selection:
@@ -115,9 +121,13 @@ def start_gui():
 
         scene_description = full_dialogue.strip().split("\n")[0]
 
-        dangerous_words = ["kill", "dead", "blood", "war", "drug", "murder", "corpse", "naked", "violence"]
+        # Filter risky or copyrighted keywords that may cause image generation to fail
+        dangerous_words = [
+            "kill", "dead", "blood", "war", "drug", "murder", "corpse",
+            "naked", "violence", "battle", "Gandalf", "Aragorn", "Mount Doom"
+        ]
         if any(word in scene_description.lower() for word in dangerous_words):
-            print("Scene description contains risky words. Replacing it with a safe default.")
+            print("Scene description contains risky or copyrighted words. Replacing with a safe default.")
             scene_description = "a peaceful futuristic city at night"
 
         print("SCENE DESCRIPTION:", scene_description)
@@ -143,16 +153,16 @@ def start_gui():
         global current_dialogue
         current_dialogue = full_dialogue
 
+    # GUI setup
     root = tk.Tk()
     root.title("IMDB TOP 10 MOVIES")
     root.geometry("900x600")
 
+    # Save dialogue to file
     def save_dialogue_to_file(dialogue, filename):
-
         try:
             if not filename.endswith('.txt'):
                 filename += '.txt'
-
             with open(filename, 'w', encoding='utf-8') as file:
                 file.write(dialogue)
             return True
@@ -183,12 +193,14 @@ def start_gui():
             else:
                 messagebox.showerror("Error", "Failed to save dialogue")
 
+    # Image frame
     image_frame = ttk.Frame(root)
-    image_frame.pack(side=tk.BOTTOM, fill=tk.BOTH, padx=10, pady=(10, 0))
+    image_frame.pack(side=tk.RIGHT, fill=tk.BOTH, padx=10, pady=10)
 
     image_label = tk.Label(image_frame)
     image_label.pack(pady=10)
 
+    # Main UI layout
     main_frame = ttk.Frame(root, padding=20)
     main_frame.pack(fill=tk.BOTH, expand=True)
 
@@ -198,6 +210,7 @@ def start_gui():
     text_box = tk.Text(main_frame, wrap=tk.WORD, font=("Arial", 11))
     text_box.pack(side=tk.RIGHT, fill=tk.BOTH, expand=True)
 
+    # Controls
     control_frame = ttk.Frame(root, padding=10)
     control_frame.pack(side=tk.BOTTOM, fill=tk.X)
 
@@ -229,6 +242,7 @@ def start_gui():
     generate_button = ttk.Button(control_frame, text="Generate Dialogue", command=on_generate_dialogue)
     generate_button.grid(row=3, column=0, columnspan=2, pady=10)
 
+    # Load movie data
     global movie_data
     movie_data = get_top_10_movies()
     for title, _ in movie_data:
@@ -236,6 +250,7 @@ def start_gui():
 
     listbox.bind("<<ListboxSelect>>", on_select)
 
+    # Save dialogue area
     buttons_frame = ttk.Frame(control_frame)
     buttons_frame.grid(row=3, column=2, columnspan=3, pady=10)
 
@@ -246,4 +261,5 @@ def start_gui():
 
     save_button = ttk.Button(buttons_frame, text="Save Dialogue", command=on_save_dialogue)
     save_button.pack(side=tk.LEFT, padx=20)
+
     root.mainloop()
